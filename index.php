@@ -2,7 +2,7 @@
 /*
   Plugin Name: Event Espresso - Attendee Mover Tool
   Plugin URI: http://eventespresso.com/
-  Description: Tool for moving attendees between events.
+  Description: Tool for moving attendees between events. This addon will reset the current price option and amounts owed for the event. Please use caution when moving attendees.
 
   Version: 0.0.1
 
@@ -31,9 +31,14 @@ function espresso_attendee_mover_version() {
 	return '0.0.1';
 }
 
+//Function to create a dropdown of events
 function espresso_attendee_mover_events_list($old_event_id) {
 	global $wpdb, $org_options;
 	
+	//defaults
+	$group = '';
+	$sql = '';
+	$is_regional_manager = FALSE;
 	$values=array(
 		array('id'=>TRUE,'text'=> __('Yes','event_espresso')),
 		array('id'=>FALSE,'text'=> __('No','event_espresso'))
@@ -42,22 +47,59 @@ function espresso_attendee_mover_events_list($old_event_id) {
 	//Check if the venue manager is turned on
 	$use_venue_manager = isset( $org_options['use_venue_manager'] ) && $org_options['use_venue_manager'] == 'Y' ? TRUE : FALSE;
 	
+	//Roles & Permissions
+	//This checks to see if the user is a regional manager and creates a union to join the events that are in the users region based on the venue/locale combination
+	if (function_exists('espresso_member_data') && espresso_member_data('role') == 'espresso_group_admin') {
+	
+		$is_regional_manager = TRUE;
+		
+		$group = get_user_meta(espresso_member_data('id'), "espresso_group", TRUE);
+		if ( $group != '0' && !empty($group) ){
+			
+			$sql = "(SELECT e.id event_id, e.event_name, e.start_date, e.wp_user ";
+						
+			//Get the venue information
+			if ( $use_venue_manager ) {
+				$sql .= ", v.name AS venue_title ";
+			} else {
+				$sql .= ", e.venue_title ";
+			}
+			
+			//Get the locale fields
+			if ( $use_venue_manager ) {
+				$sql .= ", lc.name AS locale_name, e.wp_user ";
+			}
+			
+			$sql .= " FROM " . EVENTS_DETAIL_TABLE . " e ";
+			
+			//Join the venues and locales
+			if ( ! empty( $group ) && $use_venue_manager ) {
+				$sql .= " LEFT JOIN " . EVENTS_VENUE_REL_TABLE . " vr ON vr.event_id = e.id ";
+				$sql .= " LEFT JOIN " . EVENTS_VENUE_TABLE . " v ON v.id = vr.venue_id ";
+				$sql .= " LEFT JOIN " . EVENTS_LOCALE_REL_TABLE . " l ON  l.venue_id = vr.venue_id ";
+				$sql .= " LEFT JOIN " . EVENTS_LOCALE_TABLE . " lc ON lc.id = l.locale_id ";
+			}
+		
+			//Find events in the locale
+			$sql .= !empty($group) && $use_venue_manager == true ? " AND l.locale_id IN (" . implode(",", $group) . ") " : '';
+			
+			//Event status filter
+			$sql .= " WHERE e.event_status != 'D' ";
+			
+			$sql .= ") UNION ";
+		}
+	}
+	
 	//This is the standard query to retrieve the events
-	$sql .= "SELECT e.id event_id, e.event_name, e.event_identifier, e.reg_limit, e.registration_start, ";
-	$sql .= " e.start_date, e.is_active, e.recurrence_id, e.registration_startT, e.wp_user ";
+	$sql .= "(SELECT e.id event_id, e.event_name, e.start_date, e.wp_user ";
 
 	//Get the venue information
 	if ( $use_venue_manager ) {
 		//If using the venue manager, we need to get those fields
-		$sql .= ", v.name AS venue_title, v.address AS venue_address, v.address2 AS venue_address2, v.city AS venue_city, v.state AS venue_state, v.zip AS venue_zip, v.country AS venue_country ";
+		$sql .= ", v.name AS venue_title ";
 	} else {
 		//Otherwise we need to get the address fields from the individual events
-		$sql .= ", e.venue_title, e.phone, e.address, e.address2, e.city, e.state, e.zip, e.country ";
-	}
-	
-	//get the locale fields
-	if ( $is_regional_manager && $use_venue_manager ) {
-		$sql .= ", lc.name AS locale_name, e.wp_user ";
+		$sql .= ", e.venue_title ";
 	}
 	
 	$sql .= " FROM " . EVENTS_DETAIL_TABLE . " e ";
@@ -68,19 +110,27 @@ function espresso_attendee_mover_events_list($old_event_id) {
 		$sql .= " LEFT JOIN " . EVENTS_VENUE_TABLE . " v ON v.id = vr.venue_id ";
 	}
 	
+	//Roles & Permissions
+	//Join the locales
+	if (isset($is_regional_manager) && $is_regional_manager == true && $use_venue_manager == true) {
+		$sql .= " LEFT JOIN " . EVENTS_LOCALE_REL_TABLE . " l ON  l.venue_id = vr.venue_id ";
+		$sql .= " LEFT JOIN " . EVENTS_LOCALE_TABLE . " lc ON lc.id = l.locale_id ";
+	}
+	
 	//Event status filter
 	$sql .= " WHERE e.event_status != 'D' ";
 	
+	//Roles & Permissions
 	//If user is an event manager, then show only their events
 	if (function_exists('espresso_member_data') && ( espresso_member_data('role') == 'espresso_event_manager' || espresso_member_data('role') == 'espresso_group_admin')) {
 		$sql .= " AND e.wp_user = '" . espresso_member_data('id') . "' ";
 	}
 	
-	$sql .= " ORDER BY start_date = '0000-00-00' DESC, start_date DESC, event_name ASC ";
+	$sql .= ") ORDER BY start_date = '0000-00-00' DESC, start_date DESC, event_name ASC ";
 	
 	$events = $wpdb->get_results($sql);
 	$total_events = $wpdb->num_rows;
-	$option = '';
+	$options = '';
 	if ( $total_events > 0 ) {
 		foreach ($events as $event) {
 			//print_r ($event);
@@ -107,53 +157,92 @@ function espresso_attendee_mover_events_list($old_event_id) {
 	}
 	?>
 
-	<li>
-		<p><label class="espresso" for="new_event_id">
-			<?php _e('Move to new event?', 'event_espresso'); ?> <?php echo select_input('move_to_new_event', $values, FALSE);?>	
-			</label>	
-			
-			<select name="new_event_id" size="<?php echo $size ?>" id="attendee_move_new_event_select" >
-				<?php echo $options ?>
-			</select>
-		</p>	
-		
-	</li>
+<li>
+	<p>
+		<label class="espresso" for="move_to_new_event">
+			<?php _e('Move to new event?', 'event_espresso'); ?>
+			<input name="move_to_new_event" type="checkbox" value="1" />
+		</label>
+	</p>
+	<p>
+		<label class="espresso" for="new_event_id">
+			<?php _e('Available events', 'event_espresso'); ?>
+		</label>
+		<select name="new_event_id" size="<?php echo $size ?>" id="attendee_move_new_event_select" >
+			<?php echo $options ?>
+		</select>
+	</p>
+</li>
 <?php
 }
 add_action('action_hook_espresso_attendee_mover_events_list', 'espresso_attendee_mover_events_list', 10);
 
-
+//Function to move an attendee to a different event
 function espresso_attendee_mover_move() {
 	global $wpdb, $org_options;
+	
+	//Defaults
 	$notifications['error']	 = array();
+	$error_msg_text = __('An error occured while attempting to move this attendee to a new event.', 'event_espresso');
+	
 	if ( isset($_POST['move_to_new_event']) && sanitize_text_field( $_POST['move_to_new_event'] ) == TRUE ){
-		// update payment status for ALL attendees for the entire registration
-		$set_cols_and_values = array( 
-			'event_id'=>sanitize_text_field( $_REQUEST['new_event_id'] ), 
-			'event_time'=>event_espresso_get_time($event_id, 'start_time'), 
-			'end_time'=>event_espresso_get_time($event_id, 'end_time') 
-		);
-		$set_format = array( '%d', '%s', '%s' );
-		$where_cols_and_values = array( 'id'=> sanitize_text_field( $_REQUEST['id'] ) );
-		$where_format = array( '%d' );
-		// run the update
-		$upd_success = $wpdb->update( EVENTS_ATTENDEE_TABLE, $set_cols_and_values, $where_cols_and_values, $set_format, $where_format );
-		// if there was an actual error
-		if ( $upd_success === FALSE ) {
-			$notifications['error'][] = __('An error occured while attempting to move this attendee to a new event.', 'event_espresso'); 
-		}
+		
+		if ( isset($_POST['new_event_id']) && !empty($_POST['new_event_id']) ){
+			
+			$_POST['move_attendee'] = TRUE;
+			
+			//Change the price_option_type back to default
+			do_action('action_hook_espresso_save_attendee_meta', $_REQUEST['id'], 'price_option_type', 'DEFAULT');
+			
+			$event_id = $_REQUEST['new_event_id'];
+			$attendee_id = sanitize_text_field( $_REQUEST['id'] );
+			
+			//Pass the event_time id to edit_attendee_record.php
+			$_POST['start_time_id'] = event_espresso_get_time($event_id, 'id');
+			
+			$cols_and_values = array( 
+				'event_id'=>sanitize_text_field( $event_id ), 
+				'event_time'=>event_espresso_get_time($event_id, 'start_time'), 
+				'end_time'=>event_espresso_get_time($event_id, 'end_time'),
+				// update payment amounts for this attendee
+				//'orig_price'=>event_espresso_get_orig_price_and_surcharge( $att_data_source['price_id'] ),
+				//'final_price'=>isset( $att_data_source['price_id'] ) ? event_espresso_get_final_price( $att_data_source['price_id'], $event_id, $orig_price ) : 0.00
+			);
+			$cols_and_values_format = array( '%d', '%s', '%s' );
+			
+			//Update the pricing info
+			$prices = $wpdb->get_results("SELECT price_type FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint( $event_id )  . "' ORDER BY id LIMIT 0,1 ");
+			$num_rows = $wpdb->num_rows;
+			if ($num_rows > 0) {
+				$price_type = $wpdb->last_result[0]->price_type;
+				$cols_and_values['price_option'] = $price_type;
+				array_push( $cols_and_values_format, '%s' );
+			}
+						
+			// run the update
+			$where_cols_and_values = array( 'id'=>$attendee_id );
+			$where_cols_and_values_format = array( '%d' );
+			$upd_success = $wpdb->update( EVENTS_ATTENDEE_TABLE, $cols_and_values, $where_cols_and_values, $cols_and_values_format, $where_cols_and_values_format );
+			
+			// if there was an error
+			if ( $upd_success === FALSE ) {
+				$notifications['error'][] = $error_msg_text;
+			}
+			
+		}else{
+			//No event id
+			$notifications['error'][] = $error_msg_text;
+		}		
 	}
+	
 	// display error messages
 	if ( ! empty( $notifications['error'] )) {
 		$error_msg = implode( $notifications['error'], '<br />' );
 	?>
-	<div id="message" class="error">
-		<p>
-			<strong><?php echo $error_msg; ?></strong>
-		</p>
-	</div>
-
-	<?php 
+<div id="message" class="error">
+	<p> <strong><?php echo $error_msg; ?></strong> </p>
+</div>
+<?php 
 	}else{
 		$_POST['event_id'] = $_POST['new_event_id'];
 	}
