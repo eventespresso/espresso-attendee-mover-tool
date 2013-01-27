@@ -144,6 +144,7 @@ function espresso_attendee_mover_events_list($old_event_id) {
 	}
 	
 	//Adjust the size of the dropdown
+	$size = '';
 	if ( $total_events > 10 ) {
 		$size = '10';	
 	}
