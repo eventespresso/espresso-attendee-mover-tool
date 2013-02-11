@@ -205,19 +205,26 @@ function espresso_attendee_mover_move() {
 				'event_id'=>sanitize_text_field( $event_id ), 
 				'event_time'=>event_espresso_get_time($event_id, 'start_time'), 
 				'end_time'=>event_espresso_get_time($event_id, 'end_time'),
-				// update payment amounts for this attendee
-				//'orig_price'=>event_espresso_get_orig_price_and_surcharge( $att_data_source['price_id'] ),
-				//'final_price'=>isset( $att_data_source['price_id'] ) ? event_espresso_get_final_price( $att_data_source['price_id'], $event_id, $orig_price ) : 0.00
 			);
 			$cols_and_values_format = array( '%d', '%s', '%s' );
 			
 			//Update the pricing info
-			$prices = $wpdb->get_results("SELECT price_type FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint( $event_id )  . "' ORDER BY id LIMIT 0,1 ");
+			$prices = $wpdb->get_results("SELECT id, price_type FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint( $event_id )  . "' ORDER BY id LIMIT 0,1 ");
 			$num_rows = $wpdb->num_rows;
 			if ($num_rows > 0) {
-				$price_type = $wpdb->last_result[0]->price_type;
+				//DB values
+				$price_id = $wpdb->last_result[0]->id;
+				$price_type = !empty($wpdb->last_result[1]->price_type) ? $wpdb->last_result[1]->price_type : '';
+				
+				//Calculate prices
+				$orig_price = event_espresso_get_orig_price_and_surcharge( $price_id );
+				$final_price = event_espresso_get_final_price( $price_id, $event_id, $orig_price );
+				//Update the $cols_and_values array
 				$cols_and_values['price_option'] = $price_type;
-				array_push( $cols_and_values_format, '%s' );
+				$cols_and_values['orig_price'] = number_format( (float)$orig_price->event_cost, 2, '.', '' );
+				$cols_and_values['final_price'] = number_format( (float)$final_price, 2, '.', '' );
+				
+				array_push( $cols_and_values_format, '%s', '%f', '%f' );
 			}
 						
 			// run the update
