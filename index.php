@@ -27,6 +27,28 @@
 
  */
 
+//Update notifications
+add_action('action_hook_espresso_attendee_mover_update_api', 'ee_attendee_mover_load_pue_update');
+function ee_attendee_mover_load_pue_update() {
+	global $org_options, $espresso_check_for_updates;
+	if ( $espresso_check_for_updates == false )
+		return;
+		
+	if (file_exists(EVENT_ESPRESSO_PLUGINFULLPATH . 'class/pue/pue-client.php')) { //include the file 
+		require(EVENT_ESPRESSO_PLUGINFULLPATH . 'class/pue/pue-client.php' );
+		$api_key = $org_options['site_license_key'];
+		$host_server_url = 'http://eventespresso.com';
+		$plugin_slug = 'espresso-attendee-mover-pr';
+		$options = array(
+			'apikey' => $api_key,
+			'lang_domain' => 'event_espresso',
+			'checkPeriod' => '24',
+			'option_key' => 'site_license_key'
+		);
+		$check_for_updates = new PluginUpdateEngineChecker($host_server_url, $plugin_slug, $options); //initiate the class and start the plugin update engine!
+	}
+}
+
 function espresso_attendee_mover_version() {
 	return '0.0.1';
 }
