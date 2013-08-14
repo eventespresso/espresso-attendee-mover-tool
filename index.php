@@ -188,6 +188,12 @@ function espresso_attendee_mover_events_list($old_event_id) {
 		</label>
 	</p>
 	<p>
+		<label class="espresso" for="clone_to_new_event">
+			<?php _e('Clone to new event?', 'event_espresso'); ?>
+			<input name="clone_to_new_event" type="checkbox" value="1" />
+		</label>
+	</p>
+	<p>
 		<label class="espresso" for="new_event_id">
 			<?php _e('Available events', 'event_espresso'); ?>
 		</label>
@@ -278,3 +284,98 @@ function espresso_attendee_mover_move() {
 	}
 }
 add_action('action_hook_espresso_attendee_mover_move', 'espresso_attendee_mover_move', 10);
+
+//Function to clone an attendee into a different event
+function espresso_attendee_mover_clone() {
+	global $wpdb, $org_options;
+	
+	//Defaults
+	$notifications['error']	 = array();
+	$error_msg_text = __('An error occured while attempting to move this attendee to a new event.', 'event_espresso');
+	
+	if ( isset($_POST['clone_to_new_event']) && sanitize_text_field( $_POST['clone_to_new_event'] ) == TRUE ){
+		
+		if ( isset($_POST['new_event_id']) && !empty($_POST['new_event_id']) ){
+			
+			$_POST['clone_attendee'] = TRUE;
+			
+			//Change the price_option_type back to default
+			do_action('action_hook_espresso_save_attendee_meta', $_REQUEST['id'], 'price_option_type', 'DEFAULT');
+			
+			$event_id = $_REQUEST['new_event_id'];
+			$attendee_id = sanitize_text_field( $_REQUEST['id'] );
+			$attendee_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . EVENTS_ATTENDEE_TABLE . " WHERE id='%d'", $attendee_id), ARRAY_A);
+			unset($attendee_data['id']);
+			$attendee_answers = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . EVENTS_ANSWER_TABLE . " WHERE attendee_id='%d'", $attendee_id), ARRAY_A);
+			
+			$attendee_data['registration_id']	= uniqid('', true);
+			$attendee_data['event_id'] = sanitize_text_field( $event_id );
+			$attendee_data['event_time'] = event_espresso_get_time($event_id, 'start_time');
+			$attendee_data['end_time'] = event_espresso_get_time($event_id, 'end_time');
+			
+			//Update the pricing info
+			$prices = $wpdb->get_results("SELECT id, price_type FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint( $event_id )  . "' ORDER BY id LIMIT 0,1 ");
+			$num_rows = $wpdb->num_rows;
+			if ($num_rows > 0) {
+				//DB values
+				$price_id = $wpdb->last_result[0]->id;
+				$price_type = !empty($wpdb->last_result[1]->price_type) ? $wpdb->last_result[1]->price_type : '';
+				
+				//Calculate prices
+				$orig_price = event_espresso_get_orig_price_and_surcharge( $price_id );
+				$final_price = event_espresso_get_final_price( $price_id, $event_id, $orig_price );
+				
+				//Update the $attendee_data array
+				$attendee_data['price_option'] = $price_type;
+				$attendee_data['orig_price'] = number_format( (float)$orig_price->event_cost, 2, '.', '' );
+				$attendee_data['final_price'] = number_format( (float)$final_price, 2, '.', '' );
+			}
+			
+			$cols_and_values_format = array( '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s' );
+						
+			$upd_success = $wpdb->insert( EVENTS_ATTENDEE_TABLE, $attendee_data, $cols_and_values_format );
+			$new_attendee_id = $wpdb->insert_id;
+			
+			foreach($attendee_answers as $attendee_answer) {
+				unset($attendee_answer['id']);
+				$attendee_answer['registration_id'] = $attendee_data['registration_id'];
+				$attendee_answer['attendee_id'] = $new_attendee_id;
+				$wpdb->insert( EVENTS_ANSWER_TABLE, $attendee_answer, array('%s', '%d', '%d', '%s') );
+			}
+			//other tables that might also need to be updated because new attendee created has different id than old attendee, so these tables may need to be queried with old attendee id, data updated, and inserted with new attendee id
+			//answers table
+			//attendee_checkin table
+			//attendee_meta table
+			//groupon_codes table
+			//mailchimp_attendee_rel table
+			//member_rel table
+			//seating_chart_event_seat table
+			
+			// if there was an error
+			if ( $upd_success === FALSE ) {
+				$notifications['error'][] = $error_msg_text;
+			} else {
+				//Pass the event_time id to edit_attendee_record.php
+				$_POST['start_time_id'] = event_espresso_get_time($event_id, 'id');
+				$_POST['id'] = $new_attendee_id;
+			}
+			
+		}else{
+			//No event id
+			$notifications['error'][] = $error_msg_text;
+		}		
+	}
+	
+	// display error messages
+	if ( ! empty( $notifications['error'] )) {
+		$error_msg = implode( $notifications['error'], '<br />' );
+	?>
+<div id="message" class="error">
+	<p> <strong><?php echo $error_msg; ?></strong> </p>
+</div>
+<?php 
+	}else{
+		$_POST['event_id'] = $_POST['new_event_id'];
+	}
+}
+add_action('action_hook_espresso_attendee_mover_move', 'espresso_attendee_mover_clone', 11);
