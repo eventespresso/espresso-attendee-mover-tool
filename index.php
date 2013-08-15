@@ -309,6 +309,7 @@ function espresso_attendee_mover_clone() {
 			$attendee_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . EVENTS_ATTENDEE_TABLE . " WHERE id='%d'", $attendee_id), ARRAY_A);
 			unset($attendee_data['id']);
 			$attendee_answers = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . EVENTS_ANSWER_TABLE . " WHERE attendee_id='%d'", $attendee_id), ARRAY_A);
+			$member_relations = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . $wpdb->prefix . "events_member_rel WHERE attendee_id='%d'", $attendee_id), ARRAY_A);
 
 			$attendee_data['registration_id'] = uniqid('', true);
 			$attendee_data['event_id'] = sanitize_text_field($event_id);
@@ -316,17 +317,27 @@ function espresso_attendee_mover_clone() {
 			$attendee_data['end_time'] = event_espresso_get_time($event_id, 'end_time');
 
 			//Update the pricing info
-			$prices = $wpdb->get_results("SELECT id, price_type FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint($event_id) . "' ORDER BY id LIMIT 0,1 ");
+			$prices = $wpdb->get_results("SELECT price_type, event_cost, surcharge, surcharge_type,	member_price_type, member_price FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint($event_id) . "' ORDER BY id LIMIT 1 ");
 			$num_rows = $wpdb->num_rows;
 			if ($num_rows > 0) {
-				//DB values
-				$price_id = $wpdb->last_result[0]->id;
-				$price_type = !empty($wpdb->last_result[1]->price_type) ? $wpdb->last_result[1]->price_type : '';
-
+				//values
+				if (count($member_relations) > 0) {
+					$orig_price = $prices[0]->member_price;
+				} else {
+					$orig_price = $prices[0]->event_cost;
+				}
+				
 				//Calculate prices
-				$orig_price = event_espresso_get_orig_price_and_surcharge($price_id);
-				$final_price = event_espresso_get_final_price($price_id, $event_id, $orig_price);
-
+				if ($prices[0]->surcharge > 0) {
+					if ($prices[0]->surcharge_type == "flat_rate") {
+						$final_price = $orig_price + $prices[0]->surcharge;
+					} else {
+						$final_price = $orig_price * (1 + ($prices[0]->surcharge/100));
+					}
+				} else {
+					$final_price = $orig_price;
+				}
+				
 				//Update the $attendee_data array
 				$attendee_data['price_option'] = $price_type;
 				$attendee_data['orig_price'] = number_format((float) $orig_price->event_cost, 2, '.', '');
@@ -344,21 +355,30 @@ function espresso_attendee_mover_clone() {
 				$attendee_answer['attendee_id'] = $new_attendee_id;
 				$wpdb->insert(EVENTS_ANSWER_TABLE, $attendee_answer, array('%s', '%d', '%d', '%s'));
 			}
+			
+			foreach ($member_relations as $member_relation) {
+				unset($member_relation['id']);
+				$member_relation['event_id'] = $event_id;
+				$member_relation['attendee_id'] = $new_attendee_id;
+				$wpdb->insert($wpdb->prefix . "events_member_rel", $member_relation, array('%d', '%d', '%s', '%d'));
+			}
+			
 			//other tables that might also need to be updated because new attendee created has different id than old attendee, so these tables may need to be queried with old attendee id, data updated, and inserted with new attendee id.
 			//some of them might not need to, such at the attendee_checkin table, because a new attendee wouldn't be checked in
 			//attendee_checkin table
 			//attendee_meta table
 			//groupon_codes table
 			//mailchimp_attendee_rel table
-			//member_rel table
 			//seating_chart_event_seat table
+
 			// if there was an error
 			if ($upd_success === FALSE) {
 				$notifications['error'][] = $error_msg_text;
 			} else {
 				//Pass the event_time id to edit_attendee_record.php
 				$_POST['start_time_id'] = event_espresso_get_time($event_id, 'id');
-				$_POST['id'] = $new_attendee_id;
+				$_REQUEST['id'] = $new_attendee_id;
+				$_REQUEST['registration_id'] = $attendee_data['registration_id'];
 			}
 		} else {
 			//No event id
