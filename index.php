@@ -4,7 +4,7 @@
   Plugin URI: http://eventespresso.com/
   Description: Tool for moving attendees between events. This addon will reset the current price option and amounts owed for the event. Please use caution when moving attendees.
 
-  Version: 0.0.1
+  Version: 1.1-dev
 
   Author: Event Espresso
   Author URI: http://www.eventespresso.com
