@@ -39,19 +39,24 @@ function ee_attendee_mover_load_pue_update() {
 		require(EVENT_ESPRESSO_PLUGINFULLPATH . 'class/pue/pue-client.php' );
 		$api_key = $org_options['site_license_key'];
 		$host_server_url = 'http://eventespresso.com';
-		$plugin_slug = 'espresso-attendee-mover-pr';
+		$plugin_slug = array(
+			'premium' => array('p' =>  'espresso-attendee-mover'),
+			'prerelease' => array('b' => 'espresso-attendee-mover-pr')
+			);
 		$options = array(
-				'apikey' => $api_key,
-				'lang_domain' => 'event_espresso',
-				'checkPeriod' => '24',
-				'option_key' => 'site_license_key'
+			'apikey' => $api_key,
+			'lang_domain' => 'event_espresso',
+			'checkPeriod' => '24',
+			'option_key' => 'site_license_key',
+			'plugin_basename' => plugin_basename(__FILE__),
+			'use_wp_update' => FALSE, //if TRUE then you want FREE versions of the plugin to be updated from WP
 		);
 		$check_for_updates = new PluginUpdateEngineChecker($host_server_url, $plugin_slug, $options); //initiate the class and start the plugin update engine!
 	}
 }
 
 function espresso_attendee_mover_version() {
-	return '0.0.1';
+	return '1.0.b';
 }
 
 //Function to create a dropdown of events
