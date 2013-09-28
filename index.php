@@ -39,8 +39,8 @@ function ee_attendee_mover_load_pue_update() {
 		$api_key = $org_options['site_license_key'];
 		$host_server_url = 'http://eventespresso.com';
 		$plugin_slug = array(
-			'premium' => array('p', 'espresso-attendee-mover'),
-			'prerelease' => array('b', 'espresso-attendee-mover-pr')
+			'premium' => array('p' =>  'espresso-attendee-mover'),
+			'prerelease' => array('b' => 'espresso-attendee-mover-pr')
 			);
 		$options = array(
 			'apikey' => $api_key,
