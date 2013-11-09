@@ -42,7 +42,7 @@ function ee_attendee_mover_load_pue_update() {
 			// remove following line when releasing this version to stable
 			'premium' => array('b' => 'espresso-attendee-mover-pr'),
 			// uncomment following line when releasing this version to stable
-    		// 'premium' => array('p' => 'espresso-attendee-mover-pr'),
+    		// 'premium' => array('p' => 'espresso-attendee-mover'),
    			'prerelease' => array('b' => 'espresso-attendee-mover-pr')
 		);
 		$options = array(
