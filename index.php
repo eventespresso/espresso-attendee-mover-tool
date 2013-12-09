@@ -40,14 +40,18 @@ function ee_attendee_mover_load_pue_update() {
 		$api_key = $org_options['site_license_key'];
 		$host_server_url = 'http://eventespresso.com';
 		$plugin_slug = array(
-			'premium' => array('p' =>  'espresso-attendee-mover'),
-			'prerelease' => array('b' => 'espresso-attendee-mover-pr')
-			);
+			// remove following line when releasing this version to stable
+			'premium' => array('b' => 'espresso-attendee-mover-pr'),
+			// uncomment following line when releasing this version to stable
+    		// 'premium' => array('p' => 'espresso-attendee-mover'),
+   			'prerelease' => array('b' => 'espresso-attendee-mover-pr')
+		);
 		$options = array(
 			'apikey' => $api_key,
 			'lang_domain' => 'event_espresso',
 			'checkPeriod' => '24',
 			'option_key' => 'site_license_key',
+			'options_page_slug' => 'event_espresso',
 			'plugin_basename' => plugin_basename(__FILE__),
 			'use_wp_update' => FALSE, //if TRUE then you want FREE versions of the plugin to be updated from WP
 		);
