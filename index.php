@@ -244,15 +244,16 @@ function espresso_attendee_mover_move() {
 			$cols_and_values_format = array('%d', '%s', '%s');
 
 			//Update the pricing info
-			$prices = $wpdb->get_results("SELECT id, price_type FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint($event_id) . "' ORDER BY id LIMIT 0,1 ");
-			$num_rows = $wpdb->num_rows;
-			if ($num_rows > 0) {
+			$sql = "SELECT ep.id, ep.price_type, ed.start_date, ed.end_date FROM " . EVENTS_DETAIL_TABLE . " ed ";
+			$sql .= "LEFT JOIN " . EVENTS_PRICES_TABLE . " ep ON ed.id=ep.event_id WHERE ed.id ='" . absint($event_id) . "' ORDER BY ep.id LIMIT 1 ";
+			$prices = $wpdb->get_row($sql, ARRAY_A);
+			if (!empty($prices['id'])) {
 				//DB values
-				$price_id = $wpdb->last_result[0]->id;
-				$price_type = !empty($wpdb->last_result[1]->price_type) ? $wpdb->last_result[1]->price_type : '';
+				$price_id = $prices['id'];
+				$price_type = !empty($prices['price_type']) ? $prices['price_type'] : '';
 
 				//Calculate prices
-				$orig_price = event_espresso_get_orig_price_and_surcharge($price_id);
+				$orig_price = event_espresso_get_orig_price_and_surcharge($price_id, $event_id);
 				$final_price = event_espresso_get_final_price($price_id, $event_id, $orig_price);
 				//Update the $cols_and_values array
 				$cols_and_values['price_option'] = $price_type;
@@ -261,6 +262,9 @@ function espresso_attendee_mover_move() {
 
 				array_push($cols_and_values_format, '%s', '%f', '%f');
 			}
+			$cols_and_values['start_date'] = $prices['start_date'];
+			$cols_and_values['end_date'] = $prices['end_date'];
+			array_push($cols_and_values_format, '%s', '%s');
 
 			// run the update
 			$where_cols_and_values = array('id' => $attendee_id);
@@ -322,22 +326,24 @@ function espresso_attendee_mover_clone() {
 			$attendee_data['end_time'] = event_espresso_get_time($event_id, 'end_time');
 
 			//Update the pricing info
-			$prices = $wpdb->get_results("SELECT price_type, event_cost, surcharge, surcharge_type,	member_price_type, member_price FROM " . EVENTS_PRICES_TABLE . " WHERE event_id ='" . absint($event_id) . "' ORDER BY id LIMIT 1 ");
-			$num_rows = $wpdb->num_rows;
-			if ($num_rows > 0) {
+			$sql = "SELECT ep.price_type, ep.event_cost, ep.surcharge, ep.surcharge_type,	ep.member_price_type, ep.member_price, ed.start_date, ed.end_date ";
+			$sql .= "FROM " . EVENTS_DETAIL_TABLE . " ed LEFT JOIN " . EVENTS_PRICES_TABLE . " ep ON ed.id=ep.event_id ";
+			$sql .= "WHERE ed.id ='" . absint($event_id) . "' ORDER BY ep.id LIMIT 1 ";
+			$prices = $wpdb->get_row($sql, ARRAY_A);
+			if (!empty($prices['id'])) {
 				//values
 				if (count($member_relations) > 0) {
-					$orig_price = $prices[0]->member_price;
+					$orig_price = $prices['member_price'];
 				} else {
-					$orig_price = $prices[0]->event_cost;
+					$orig_price = $prices['event_cost'];
 				}
 				
 				//Calculate prices
-				if ($prices[0]->surcharge > 0) {
-					if ($prices[0]->surcharge_type == "flat_rate") {
-						$final_price = $orig_price + $prices[0]->surcharge;
+				if ($prices['surcharge'] > 0) {
+					if ($prices['surcharge_type'] == "flat_rate") {
+						$final_price = $orig_price + $prices['surcharge'];
 					} else {
-						$final_price = $orig_price * (1 + ($prices[0]->surcharge/100));
+						$final_price = $orig_price * (1 + ($prices['surcharge']/100));
 					}
 				} else {
 					$final_price = $orig_price;
@@ -345,10 +351,12 @@ function espresso_attendee_mover_clone() {
 				
 				//Update the $attendee_data array
 				$attendee_data['price_option'] = $price_type;
-				$attendee_data['orig_price'] = number_format((float) $orig_price->event_cost, 2, '.', '');
+				$attendee_data['orig_price'] = number_format((float) $orig_price, 2, '.', '');
 				$attendee_data['final_price'] = number_format((float) $final_price, 2, '.', '');
 			}
-
+			$attendee_data['start_date'] = $prices['start_date'];
+			$attendee_data['end_date'] = $prices['end_date'];
+			
 			$cols_and_values_format = array('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s');
 
 			$upd_success = $wpdb->insert(EVENTS_ATTENDEE_TABLE, $attendee_data, $cols_and_values_format);
