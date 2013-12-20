@@ -322,7 +322,11 @@ function espresso_attendee_mover_clone() {
 			$attendee_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . EVENTS_ATTENDEE_TABLE . " WHERE id='%d'", $attendee_id), ARRAY_A);
 			unset($attendee_data['id']);
 			$attendee_answers = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . EVENTS_ANSWER_TABLE . " WHERE attendee_id='%d'", $attendee_id), ARRAY_A);
-			$member_relations = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . $wpdb->prefix . "events_member_rel WHERE attendee_id='%d'", $attendee_id), ARRAY_A);
+			if (defined("EVENTS_MEMBER_REL_TABLE")) {
+				$member_relations = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . $wpdb->prefix . "events_member_rel WHERE attendee_id='%d'", $attendee_id), ARRAY_A);
+			} else {
+				$member_relations = array();
+			}
 
 			$attendee_data['registration_id'] = uniqid('', true);
 			$attendee_data['event_id'] = sanitize_text_field($event_id);
@@ -334,7 +338,7 @@ function espresso_attendee_mover_clone() {
 			$sql .= "FROM " . EVENTS_DETAIL_TABLE . " ed LEFT JOIN " . EVENTS_PRICES_TABLE . " ep ON ed.id=ep.event_id ";
 			$sql .= "WHERE ed.id ='" . absint($event_id) . "' ORDER BY ep.id LIMIT 1 ";
 			$prices = $wpdb->get_row($sql, ARRAY_A);
-			if (!empty($prices['id'])) {
+			if (!empty($prices)) {
 				//values
 				if (count($member_relations) > 0) {
 					$orig_price = $prices['member_price'];
@@ -354,7 +358,7 @@ function espresso_attendee_mover_clone() {
 				}
 				
 				//Update the $attendee_data array
-				$attendee_data['price_option'] = $price_type;
+				$attendee_data['price_option'] = $prices['price_type'];
 				$attendee_data['orig_price'] = number_format((float) $orig_price, 2, '.', '');
 				$attendee_data['final_price'] = number_format((float) $final_price, 2, '.', '');
 			}
