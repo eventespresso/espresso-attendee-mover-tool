@@ -342,8 +342,10 @@ function espresso_attendee_mover_clone() {
 				//values
 				if (count($member_relations) > 0) {
 					$orig_price = $prices['member_price'];
+					$price_type = $prices['member_price_type'];
 				} else {
 					$orig_price = $prices['event_cost'];
+					$price_type = $prices['price_type'];
 				}
 				
 				//Calculate prices
@@ -358,7 +360,7 @@ function espresso_attendee_mover_clone() {
 				}
 				
 				//Update the $attendee_data array
-				$attendee_data['price_option'] = $prices['price_type'];
+				$attendee_data['price_option'] = $price_type;
 				$attendee_data['orig_price'] = number_format((float) $orig_price, 2, '.', '');
 				$attendee_data['final_price'] = number_format((float) $final_price, 2, '.', '');
 			}
