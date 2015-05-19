@@ -366,8 +366,55 @@ function espresso_attendee_mover_clone() {
 			}
 			$attendee_data['start_date'] = $prices['start_date'];
 			$attendee_data['end_date'] = $prices['end_date'];
-			
-			$cols_and_values_format = array('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s');
+
+			//keys are the column names, values are the formats
+			$match_array = array(
+				'registration_id' => '%s',
+				'is_primary' => '%d',
+				'lname' => '%s',
+				'fname' => '%s',
+				'address' => '%s',
+				'address2' => '%s',
+				'city' => '%s',
+				'state' => '%s',
+				'zip' => '%s',
+				'country_id' => '%s', 
+				'organization_name' => '%s',
+				'vat_number' => '%s',
+				'email' => '%s',
+				'phone' => '%s',
+				'date' => '%s',
+				'price_option' => '%s',
+				'orig_price' => '%f',
+				'final_price' => '%f',
+				'quantity' => '%d',
+				'total_cost' => '%f',
+				'amount_pd' => '%f',
+				'coupon_code' => '%s',
+				'payment' => '%s',
+				'payment_status' => '%s',
+				'txn_type' => '%s',
+				'txn_id' => '%s',
+				'payment_date' => '%s',
+				'event_id' => '%d',
+				'event_time' => '%s',
+				'end_time' => '%s',
+				'start_date' => '%s',
+				'end_date' => '%s',
+				'attendee_session' => '%s',
+				'transaction_details' => '%s',
+				'pre_approve' => '%d',
+				'checked_in' => '%d',
+				'checked_in_quantity' => '%d',
+				'hashSalt' => '%s',
+			);
+
+			$cols_and_values_format = array();
+			foreach ( array_keys( $attendee_data ) as $column ) {
+				if ( isset( $match_array[$column] ) ) {
+					$cols_and_values_format[] = $match_array[$column];
+				}
+			}
 
 			$upd_success = $wpdb->insert(EVENTS_ATTENDEE_TABLE, $attendee_data, $cols_and_values_format);
 			$new_attendee_id = $wpdb->insert_id;
